@@ -1,3 +1,0 @@
-sudo apt-get install python3-tk  # For Linux
-pip install networkx
-pip install matplotlib
