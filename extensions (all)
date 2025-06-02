@@ -1,0 +1,23 @@
+Required Extensions (Libraries) to Run This Program
+Required Libraries:
+
+
+1:networkx
+Purpose: Handles graph creation, shortest path (Dijkstra), MST (Kruskal), and centrality analysis.
+Install via pip:
+bash:pip install networkx
+
+2:matplotlib
+Purpose: Visualizes graphs with nodes, edges, weights, and centrality.
+Install via pip:
+bash:pip install matplotlib
+
+3:os (Standard Library)
+Purpose: Checks for file existence during import.
+Note: No installation needed; comes with Python.
+
+
+4:tkinter
+Description: Built-in Python module for creating graphical user interfaces (GUIs).
+Installation: Usually comes pre-installed with Python. If not:
+bash:sudo apt-get install python3-tk  # For Linu
