@@ -1,0 +1,239 @@
+import tkinter as tk
+from tkinter import ttk, messagebox, filedialog
+import networkx as nx
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import os
+
+class RailwayApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Railway Network Analysis GUI")
+        self.G = None
+        self.num_stations = 0
+        self.current_frame = None
+        
+        # Configure style
+        self.style = ttk.Style()
+        self.style.theme_use('clam')
+        self.style.configure('TButton', font=('Helvetica', 10), padding=5)
+        self.style.configure('TLabel', font=('Helvetica', 11))
+        
+        self.show_main_menu()
+
+    def clear_frame(self):
+        if self.current_frame:
+            self.current_frame.destroy()
+
+    def show_main_menu(self):
+        self.clear_frame()
+        self.current_frame = ttk.Frame(self.root)
+        self.current_frame.pack(padx=20, pady=20)
+
+        ttk.Label(self.current_frame, text="Railway Network Optimization", style='TLabel').grid(row=0, column=0, pady=10, columnspan=2)
+
+        menu_buttons = [
+            ("Create New Network", self.show_network_creation),
+            ("Find Shortest Path", self.show_shortest_path),
+            ("Show Minimum Spanning Tree", self.show_mst),
+            ("Show Centrality", self.show_centrality),
+            ("Import/Export", self.show_import_export),
+            ("Exit", self.root.quit)
+        ]
+
+        for i, (text, command) in enumerate(menu_buttons, start=1):
+            ttk.Button(self.current_frame, text=text, command=command).grid(row=i, column=0, pady=5, sticky='ew')
+
+    def show_network_creation(self):
+        self.clear_frame()
+        self.current_frame = ttk.Frame(self.root)
+        self.current_frame.pack(padx=20, pady=20)
+
+        ttk.Label(self.current_frame, text="Create New Network").grid(row=0, column=0, pady=10, columnspan=2)
+
+        ttk.Label(self.current_frame, text="Number of Stations:").grid(row=1, column=0, pady=5)
+        self.num_entry = ttk.Entry(self.current_frame)
+        self.num_entry.grid(row=1, column=1, pady=5)
+
+        ttk.Button(self.current_frame, text="Create", command=self.create_network).grid(row=2, column=0, pady=10, columnspan=2)
+        ttk.Button(self.current_frame, text="Back", command=self.show_main_menu).grid(row=3, column=0, pady=5, columnspan=2)
+
+    def create_network(self):
+        try:
+            self.num_stations = int(self.num_entry.get())
+            if self.num_stations < 2:
+                messagebox.showerror("Error", "Minimum 2 stations required")
+                return
+            
+            self.G = nx.DiGraph()
+            self.show_distance_matrix()
+        except ValueError:
+            messagebox.showerror("Error", "Please enter a valid number")
+
+    def show_distance_matrix(self):
+        self.clear_frame()
+        self.current_frame = ttk.Frame(self.root)
+        self.current_frame.pack(padx=10, pady=10)
+
+        ttk.Label(self.current_frame, text="Enter Distances Between Stations").grid(row=0, column=0, pady=5, columnspan=self.num_stations)
+
+        self.entries = {}
+        for i in range(self.num_stations):
+            ttk.Label(self.current_frame, text=f"From {i+1}").grid(row=1, column=i+1, padx=5)
+            ttk.Label(self.current_frame, text=f"To {i+1}").grid(row=i+2, column=0, padx=5)
+
+        for i in range(self.num_stations):
+            for j in range(self.num_stations):
+                if i != j:
+                    entry = ttk.Entry(self.current_frame, width=5)
+                    entry.grid(row=i+2, column=j+1, padx=5, pady=2)
+                    self.entries[(i, j)] = entry
+
+        ttk.Button(self.current_frame, text="Submit", command=self.build_graph).grid(row=self.num_stations+2, column=0, pady=10, columnspan=self.num_stations+1)
+        ttk.Button(self.current_frame, text="Back", command=self.show_network_creation).grid(row=self.num_stations+3, column=0, pady=5, columnspan=self.num_stations+1)
+
+    def build_graph(self):
+        for (i, j), entry in self.entries.items():
+            if entry.get():
+                try:
+                    distance = int(entry.get())
+                    self.G.add_edge(i, j, weight=distance)
+                except ValueError:
+                    messagebox.showerror("Error", f"Invalid distance between {i+1} and {j+1}")
+                    return
+        self.show_main_menu()
+        self.draw_graph(self.G, "Network Created Successfully!")
+
+    def show_shortest_path(self):
+        if not self.validate_graph():
+            return
+        
+        self.clear_frame()
+        self.current_frame = ttk.Frame(self.root)
+        self.current_frame.pack(padx=20, pady=20)
+
+        ttk.Label(self.current_frame, text="Find Shortest Path").grid(row=0, column=0, pady=5, columnspan=2)
+
+        ttk.Label(self.current_frame, text="From Station:").grid(row=1, column=0, pady=5)
+        self.source_var = tk.StringVar()
+        ttk.Combobox(self.current_frame, textvariable=self.source_var, 
+                     values=[str(i+1) for i in range(self.num_stations)]).grid(row=1, column=1, pady=5)
+
+        ttk.Label(self.current_frame, text="To Station:").grid(row=2, column=0, pady=5)
+        self.dest_var = tk.StringVar()
+        ttk.Combobox(self.current_frame, textvariable=self.dest_var, 
+                    values=[str(i+1) for i in range(self.num_stations)]).grid(row=2, column=1, pady=5)
+
+        ttk.Button(self.current_frame, text="Find Path", command=self.find_path).grid(row=3, column=0, pady=10, columnspan=2)
+        ttk.Button(self.current_frame, text="Back", command=self.show_main_menu).grid(row=4, column=0, pady=5, columnspan=2)
+
+    def find_path(self):
+        try:
+            source = int(self.source_var.get()) - 1
+            dest = int(self.dest_var.get()) - 1
+            path = nx.shortest_path(self.G, source=source, target=dest, weight='weight')
+            path_edges = [(path[i], path[i+1]) for i in range(len(path)-1)]
+            subgraph = self.G.edge_subgraph(path_edges)
+            self.draw_graph(subgraph, f"Shortest Path: {' -> '.join(map(str, [n+1 for n in path]))}")
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+
+    def show_mst(self):
+        if not self.validate_graph():
+            return
+        
+        try:
+            G_undirected = self.G.to_undirected()
+            if not nx.is_connected(G_undirected):
+                messagebox.showwarning("Warning", "Graph is not connected - MST cannot cover all stations")
+            
+            mst = nx.minimum_spanning_tree(G_undirected)
+            self.draw_graph(mst, "Minimum Spanning Tree")
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+
+    def show_centrality(self):
+        if not self.validate_graph():
+            return
+        
+        fig = plt.Figure(figsize=(6, 6))
+        ax = fig.add_subplot(111)
+        
+        degree_cent = nx.degree_centrality(self.G)
+        between_cent = nx.betweenness_centrality(self.G, weight='weight')
+        
+        node_size = [v * 3000 for v in degree_cent.values()]
+        node_color = [v * 100 for v in between_cent.values()]
+        
+        pos = nx.spring_layout(self.G)
+        nx.draw(self.G, pos, ax=ax, with_labels=True, 
+               node_size=node_size, node_color=node_color,
+               cmap=plt.cm.viridis, font_color='white')
+        
+        self.embed_plot(fig, "Centrality Measures")
+
+    def show_import_export(self):
+        self.clear_frame()
+        self.current_frame = ttk.Frame(self.root)
+        self.current_frame.pack(padx=20, pady=20)
+
+        ttk.Label(self.current_frame, text="Import/Export Options").grid(row=0, column=0, pady=5, columnspan=2)
+
+        ttk.Button(self.current_frame, text="Export Graph", command=self.export_graph).grid(row=1, column=0, pady=5)
+        ttk.Button(self.current_frame, text="Import Graph", command=self.import_graph).grid(row=1, column=1, pady=5)
+        ttk.Button(self.current_frame, text="Back", command=self.show_main_menu).grid(row=2, column=0, pady=10, columnspan=2)
+
+    def export_graph(self):
+        filename = filedialog.asksaveasfilename(defaultextension=".gpickle")
+        if filename:
+            nx.write_gpickle(self.G, filename)
+            messagebox.showinfo("Success", f"Graph exported to {filename}")
+
+    def import_graph(self):
+        filename = filedialog.askopenfilename(filetypes=[("Graph files", "*.gpickle")])
+        if filename:
+            try:
+                self.G = nx.read_gpickle(filename)
+                self.num_stations = len(self.G.nodes)
+                self.draw_graph(self.G, "Imported Graph")
+                messagebox.showinfo("Success", "Graph imported successfully!")
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to import graph: {str(e)}")
+
+    def draw_graph(self, G, title):
+        fig = plt.Figure(figsize=(6, 6))
+        ax = fig.add_subplot(111)
+        pos = nx.spring_layout(G)
+        labels = {i: i+1 for i in G.nodes()}
+        
+        if isinstance(G, nx.DiGraph):
+            nx.draw(G, pos, ax=ax, with_labels=True, labels=labels,
+                   node_color='skyblue', node_size=700,
+                   connectionstyle="arc3,rad=0.1", arrows=True)
+        else:
+            nx.draw(G, pos, ax=ax, with_labels=True, labels=labels,
+                   node_color='lightgreen', node_size=700)
+        
+        edge_labels = nx.get_edge_attributes(G, 'weight')
+        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, ax=ax)
+        ax.set_title(title)
+        self.embed_plot(fig, title)
+
+    def embed_plot(self, fig, title):
+        top = tk.Toplevel(self.root)
+        top.title(title)
+        canvas = FigureCanvasTkAgg(fig, master=top)
+        canvas.draw()
+        canvas.get_tk_widget().pack()
+        ttk.Button(top, text="Close", command=top.destroy).pack()
+
+    def validate_graph(self):
+        if self.G is None or len(self.G.edges) == 0:
+            messagebox.showerror("Error", "No network created or network is empty!")
+            return False
+        return True
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = RailwayApp(root)
+    root.mainloop()
